@@ -59,9 +59,38 @@ async def get_entry(request: Request, entry_id: str, entry_service: EntryService
     3. Return the entry as JSON if found
     
     Hint: Check the update_entry endpoint for similar patterns
-    """
+    
     raise HTTPException(status_code=501, detail="Not implemented - complete this endpoint!")
-
+    """
+    """
+    Fetches a single learning journal entry by its unique UUID string.
+    """
+    try:
+        # 1. Ask the service layer to retrieve the entry from the database repository
+        entry = await entry_service.get_entry(entry_id)
+        
+        # 2. Defensive programming: If the service returns None, the item does not exist
+        if not entry:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Journal entry with ID '{entry_id}' was not found."
+            )
+            
+        # 3. Return the clean entry payload back to the consumer
+        return {
+            "detail": "Entry retrieved successfully",
+            "entry": entry
+        }
+    except HTTPException:
+        # Re-raise our own 404 validation errors directly
+        raise
+    except Exception as e:
+        # Catch unexpected infrastructure anomalies cleanly
+        raise HTTPException(
+            status_code=400, 
+            detail=f"An error occurred while fetching the entry: {str(e)}"
+        )
+    
 @router.patch("/entries/{entry_id}")
 async def update_entry(entry_id: str, entry_update: dict, entry_service: EntryService = Depends(get_entry_service)):
     """Update a journal entry"""
