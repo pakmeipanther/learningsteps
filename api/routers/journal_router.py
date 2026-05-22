@@ -115,9 +115,42 @@ async def delete_entry(entry_id: str, entry_service: EntryService = Depends(get_
     4. Return 404 if entry not found
     
     Hint: Look at how the update_entry endpoint checks for existence
-    """
+    
     raise HTTPException(status_code=501, detail="Not implemented - complete this endpoint!")
+    """
 
+    """
+    Validates a journal entry's existence, then removes the record 
+    permanently from the database cluster via parameterized query.
+    """
+    try:
+        # 1. Verification Step: Check if the entry exists before deleting
+        existing_entry = await entry_service.get_entry(entry_id)
+        if not existing_entry:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Deletion failed. Journal entry with ID '{entry_id}' does not exist."
+            )
+        
+        # 2. Execution Step: Send the delete call to the database service
+        await entry_service.delete_entry(entry_id)
+        
+        # 3. Success Response Mapping
+        return {
+            "detail": "Entry deleted successfully",
+            "deleted_id": entry_id
+        }
+        
+    except HTTPException:
+        # Re-raise explicit HTTP exceptions (like our 404 validation) immediately
+        raise
+    except Exception as e:
+        # Gracefully handle unexpected backend errors without exposing system internals
+        raise HTTPException(
+            status_code=400,
+            detail=f"An error occurred while executing data cleanup: {str(e)}"
+        )
+    
 @router.delete("/entries")
 async def delete_all_entries(entry_service: EntryService = Depends(get_entry_service)):
     """Delete all journal entries"""

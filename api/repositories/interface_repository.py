@@ -6,7 +6,8 @@ class DatabaseInterface(ABC):
     """Abstract interface for database operations."""
     
     @abstractmethod
-    async def create_entry(self, entry_data: Dict[str, Any]) -> None:
+    # Changed output from 'None' to 'Dict[str, Any]' to match your repository return value
+    async def create_entry(self, entry_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new journal entry."""
         pass
 
@@ -16,7 +17,8 @@ class DatabaseInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_entry(self, entry_id: str) -> Dict[str, Any]:
+    # Appended '| None' to match the repository's missing item state handler
+    async def get_entry(self, entry_id: str) -> Dict[str, Any] | None:
         """Retrieve a specific journal entry by ID."""
         pass
 
