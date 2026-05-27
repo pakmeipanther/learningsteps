@@ -27,5 +27,15 @@ COPY api/ ./api/
 # Step 8: Expose the network port your FastAPI application listens on
 EXPOSE 8000
 
+# Create a dedicated, non-root system group and user account
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+# Switch execution contexts away from root before launching processes
+USER appuser
+
+# Regularly poll the application entrypoint to ensure the server is alive
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD curl -f http://localhost:8000/health || exit 1
+
 # Step 9: Define the immutable operational command to spin up your Uvicorn server
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

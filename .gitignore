@@ -171,3 +171,9 @@ cython_debug/
 .pypirc
 
 *.DS_Store
+
+# Local Terraform runtime directories
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
