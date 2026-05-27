@@ -15,3 +15,13 @@ variable "project_name" {
   default     = "learningsteps"
   description = "Prefix applied to naming structures to avoid global naming collisions"
 }
+
+variable "acr_name" {
+  type        = string
+  description = "The exact name of the existing Azure Container Registry"
+}
+
+variable "cluster_name" {
+  type        = string
+  description = "The target deployment name for the managed AKS cluster"
+}

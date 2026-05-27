@@ -65,6 +65,8 @@ resource "azurerm_key_vault" "kv" {
   network_acls {
     bypass         = "AzureServices"
     default_action = "Deny"
+    # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
+    ip_rules       = ["159.26.104.134"]
   }
 
   # Grant your logged-in administrator account full management permissions
@@ -124,6 +126,7 @@ resource "azurerm_postgresql_flexible_server" "postgres" {
   location             = var.location
   version              = "15"
   delegated_subnet_id  = azurerm_subnet.db_subnet.id
+  zone                 = "3"
   
   
   # 7.1. CRITICAL: Make sure this line points to the new DNS zone ID!
@@ -174,7 +177,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
   default_node_pool {
     name           = "default"
     node_count     = 1
-    vm_size        = "Standard_A2_v2"
+    os_disk_type   = "Managed"
+    vm_size        = "Standard_D2s_v5"
     vnet_subnet_id = azurerm_subnet.aks_subnet.id
   }
 
@@ -199,19 +203,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
 # DATABASE SECURITY HARDENING & AUDIT CONFIGURATIONS
 # =================================================================
 
-# 1. FIXES AZU-0019: Log all successful database connections
-resource "azurerm_postgresql_flexible_server_configuration" "pg_log_connections" {
-  name      = "log_connections"
-  server_id = azurerm_postgresql_flexible_server.postgres.id
-  value     = "on"
-}
-
 # 2. FIXES AZU-0021: Corrected parameter parameter name for connection throttling
-resource "azurerm_postgresql_flexible_server_configuration" "pg_log_connection_throttling" {
-  name      = "log_connection_throttling"
-  server_id = azurerm_postgresql_flexible_server.postgres.id
-  value     = "on"
-}
+# resource "azurerm_postgresql_flexible_server_configuration" "pg_log_connection_throttling" {
+#   name      = "log_connection_throttling"
+#   server_id = azurerm_postgresql_flexible_server.postgres.id
+#   value     = "on"
+# }
 
 # 3. FIXES AZU-0024: Log engine database checkpoints
 resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
