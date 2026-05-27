@@ -70,12 +70,16 @@ jobs:
         with:
           fetch-depth: 0 # TruffleHog needs the entire Git commit log history to scan for leaked secrets!
 
-    # REPLACED: Swapped enterprise action wrapper out for the open-source community scanner
+      # ========================================================================
+      # Instantiates the Open-Source TruffleHog tool to hunt for leaked secrets
+      # ========================================================================
       - name: Run TruffleHog Secret Scanner
+        # Points to the official community marketplace repository core
         uses: trufflesecurity/trufflehog@main
         with:
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          # Tells TruffleHog to scan the current checked-out repository commit logs
+          path: ./
+          # Filters scanner tasks to flag exclusively valid, active signatures
           extra_args: --only-verified
 
       - name: Run Trivy Container Configuration Audit
