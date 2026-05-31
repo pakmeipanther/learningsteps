@@ -178,11 +178,11 @@ jobs:
           echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
           echo "Discovered GitHub Runner Public IP: $RUNNER_IP"
           
-          # 2. Append the runner's IP address straight into the AKS authorized range list
+          # 2. Append ONLY the runner's IP address straight into the authorized ranges
           az aks update \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --name ${{ env.AKS_CLUSTER_NAME }} \
-            --api-server-authorized-ip-ranges "${{ secrets.LOCAL_DESKTOP_IP }}/32,${RUNNER_IP}/32"
+            --api-server-authorized-ip-ranges "${RUNNER_IP}/32"
 
       # Fetch the private connection profile (kubeconfig) for your specific AKS Cluster
       - name: Download AKS Cluster Credentials
@@ -200,13 +200,15 @@ jobs:
           kubectl rollout status deployment/learningsteps-deployment --timeout=5m
 
       # ========================================================================
-      # POST-FLIGHT CLEANUP: Remove the runner's IP address to secure the firewall
+      # POST-FLIGHT CLEANUP: Reset the firewall to a safe default state
       # ========================================================================
       - name: Strip Runner IP from Firewall Whitelist
         if: always() # Forces this cleanup step to execute even if the deployment fails!
         run: |
           echo "Removing GitHub Runner IP (${{ env.RUNNER_IP }}) from cluster firewall..."
+          
+          # Re-lock the API server by resetting the authorized ranges array back to empty/deny-all
           az aks update \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --name ${{ env.AKS_CLUSTER_NAME }} \
-            --api-server-authorized-ip-ranges "${{ secrets.LOCAL_DESKTOP_IP }}/32"
+            --api-server-authorized-ip-ranges "0.0.0.0/32"
