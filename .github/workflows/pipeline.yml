@@ -10,6 +10,14 @@ permissions:
   id-token: write
   contents: read
 
+# ========================================================================
+# GLOBAL ENVIRONMENT VARIABLE DECLARATIONS
+# ========================================================================
+env:
+  # SUCCESS VALUE: Points your automated runner to your active, live sandbox asset names
+  AZURE_RESOURCE_GROUP: "LearningSteps-RG"
+  AKS_CLUSTER_NAME:     "learningsteps-aks-cluster"
+
 jobs:
   # ==========================================
   # STAGE 1: BUILD & UNIT TEST
@@ -55,7 +63,7 @@ jobs:
           tags: learningsteps-app:test
 
 
-# ==========================================
+  # ==========================================
   # STAGE 2: DEVSECOPS SECURITY SCANNING
   # ==========================================
   security-scans:
@@ -99,7 +107,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
 
-# ==========================================
+  # ==========================================
   # STAGE 3: AUTHENTICATE & PUSH TO ACR
   # ==========================================
   push-to-registry:
@@ -139,7 +147,7 @@ jobs:
             ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:latest
             ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
 
-# ==========================================
+  # ==========================================
   # STAGE 4: ORCHESTRATE DEPLOYMENT TO AKS
   # ==========================================
   deploy-to-aks:
@@ -164,8 +172,8 @@ jobs:
       - name: Download AKS Cluster Credentials
         run: |
           az aks get-credentials \
-            --resource-group learn-devsecops-rg \
-            --name learningsteps-aks-cluster
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER_NAME }}
 
       # Safely inject the unique production image tag directly into the cluster engine
       - name: Execute Rolling Deployment Update
