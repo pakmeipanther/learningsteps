@@ -153,7 +153,6 @@ jobs:
   deploy-to-aks:
     name: Orchestrate Rolling Upgrade on AKS Cluster
     runs-on: ubuntu-latest
-    # This prevents deployment tasks from firing if the push to registry fails!
     needs: push-to-registry 
 
     steps:
@@ -168,6 +167,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # ========================================================================
+      # AUTOMATED FIREWALL HOOKS: Whitelist the temporary runner IP address
+      # ========================================================================
+      - name: Discover and Whitelist Runner Public IP
+        id: ip_fetcher
+        run: |
+          # 1. Query the runner's active public IPv4 address routing path
+          RUNNER_IP=$(curl -s https://ifconfig.me)
+          echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
+          echo "Discovered GitHub Runner Public IP: $RUNNER_IP"
+          
+          # 2. Append the runner's IP address straight into the AKS authorized range list
+          az aks update \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER_NAME }} \
+            --api-server-authorized-ip-ranges "${{ secrets.LOCAL_DESKTOP_IP }}/32,${RUNNER_IP}/32"
+
       # Fetch the private connection profile (kubeconfig) for your specific AKS Cluster
       - name: Download AKS Cluster Credentials
         run: |
@@ -178,10 +194,19 @@ jobs:
       # Safely inject the unique production image tag directly into the cluster engine
       - name: Execute Rolling Deployment Update
         run: |
-          # We use set image to update the live container to the exact Git commit SHA version
           kubectl set image deployment/learningsteps-deployment \
-            app-container=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }} \
-            --record
+            app-container=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
             
-          # Monitor the rolling rollout progress to guarantee it stabilizes cleanly
           kubectl rollout status deployment/learningsteps-deployment --timeout=5m
+
+      # ========================================================================
+      # POST-FLIGHT CLEANUP: Remove the runner's IP address to secure the firewall
+      # ========================================================================
+      - name: Strip Runner IP from Firewall Whitelist
+        if: always() # Forces this cleanup step to execute even if the deployment fails!
+        run: |
+          echo "Removing GitHub Runner IP (${{ env.RUNNER_IP }}) from cluster firewall..."
+          az aks update \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER_NAME }} \
+            --api-server-authorized-ip-ranges "${{ secrets.LOCAL_DESKTOP_IP }}/32"

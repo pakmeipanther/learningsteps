@@ -1,3 +1,10 @@
+# ========================================================================
+# RUNTIME UTILITY: Dynamically fetches your current Wi-Fi public IPv4 address
+# ========================================================================
+data "http" "local_public_ip" {
+  url = "https://ipv4.icanhazip.com"
+}
+
 # 1. Fetch our existing resource group context
 data "azurerm_resource_group" "rg" {
   name = var.resource_group_name
@@ -188,8 +195,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   # or include your specific public IP network range to connect directly from home!
   # MODERN SYNTAX: Replaces the deprecated top-level variable array
   # MODERN SYNTAX: Restricts management plane access strictly to your workspace desk
+  # AUTOMATED SECURE PERIMETER: Dynamically whitelists your active Wi-Fi IP address
   api_server_access_profile {
-    authorized_ip_ranges = ["81.65.149.203/32"]
+    authorized_ip_ranges = ["${chomp(data.http.local_public_ip.response_body)}/32"]
   }
 
   default_node_pool {
