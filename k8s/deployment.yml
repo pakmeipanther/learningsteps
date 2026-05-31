@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: learningsteps-deployment
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: learningsteps-app
+  template:
+    metadata:
+      labels:
+        app: learningsteps-app
+    spec:
+# ========================================================================
+# CORRECTED CONTAINER WORKLOAD MAPPING
+# ========================================================================
+      containers:
+      - name: app-container
+        image: learningsteps.azurecr.io/learningsteps-app:latest
+        ports:
+        - containerPort: 80 

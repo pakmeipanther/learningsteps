@@ -191,12 +191,19 @@ jobs:
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --name ${{ env.AKS_CLUSTER_NAME }}
 
-      # Safely inject the unique production image tag directly into the cluster engine
+      # Safely initialize the application components before executing the rolling update
       - name: Execute Rolling Deployment Update
         run: |
+          # 1. Declaratively apply your base deployment blueprints to ensure the resource exists
+          if [ -d "k8s" ] && [ -f "k8s/deployment.yml" ]; then
+            kubectl apply -f k8s/deployment.yml
+          fi
+          
+          # 2. Inject the unique, verified production image tag directly into the cluster engine
           kubectl set image deployment/learningsteps-deployment \
             app-container=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
             
+          # 3. Monitor the rolling rollout progress to guarantee it stabilizes cleanly
           kubectl rollout status deployment/learningsteps-deployment --timeout=5m
 
       # ========================================================================
