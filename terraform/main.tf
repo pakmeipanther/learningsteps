@@ -66,7 +66,7 @@ resource "azurerm_key_vault" "kv" {
     bypass         = "AzureServices"
     default_action = "Deny"
     # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
-    ip_rules       = ["159.26.104.134"]
+    ip_rules       = ["81.65.149.203"]
   }
 
   # Grant your logged-in administrator account full management permissions
@@ -80,6 +80,16 @@ resource "azurerm_key_vault" "kv" {
   }
 }
 
+# ========================================================================
+# Programmatic Synchronization Delay Block
+# ========================================================================
+resource "time_sleep" "wait_for_firewall_sync" {
+  depends_on = [azurerm_key_vault.kv]
+
+  # SUCCESS VALUE: Halts the local build execution loop to allow cloud firewalls to fully activate
+  create_duration = "30s"
+}
+
 # 4. Store a secure random password inside the Key Vault for our Database Admin Account
 resource "random_password" "db_password" {
   length           = 16
@@ -88,6 +98,9 @@ resource "random_password" "db_password" {
 }
 
 resource "azurerm_key_vault_secret" "db_pass_secret" {
+  # SUCCESS VALUE: Blocks secret injection until the 30-second network synchronization delay clears
+  depends_on   = [time_sleep.wait_for_firewall_sync]
+
   name         = "pg-admin-password"
   value        = random_password.db_password.result
   key_vault_id = azurerm_key_vault.kv.id
@@ -163,6 +176,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
   resource_group_name = data.azurerm_resource_group.rg.name
   dns_prefix          = "${var.project_name}-k8s"
 
+  # SUCCESS VALUE: Matches your existing cluster configuration to prevent API lockouts
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
+
   # FIXES AZU-0042: Enforce strict Role-Based Access Control
   role_based_access_control_enabled = true
 
@@ -170,16 +187,24 @@ resource "azurerm_kubernetes_cluster" "aks" {
   # Note: Set this to ["0.0.0.0/32"] to completely block external API traffic, 
   # or include your specific public IP network range to connect directly from home!
   # MODERN SYNTAX: Replaces the deprecated top-level variable array
+  # MODERN SYNTAX: Restricts management plane access strictly to your workspace desk
   api_server_access_profile {
-    authorized_ip_ranges = ["0.0.0.0/32"]
+    authorized_ip_ranges = ["81.65.149.203/32"]
   }
 
   default_node_pool {
     name           = "default"
     node_count     = 1
     os_disk_type   = "Managed"
-    vm_size        = "Standard_D2s_v5"
+    vm_size      = var.vm_size
     vnet_subnet_id = azurerm_subnet.aks_subnet.id
+
+    # SUCCESS VALUE: Restricts the API from trying to lease temporary surge buffer VMs
+    upgrade_settings {
+      drain_timeout_in_minutes      = 0
+      max_surge                     = "1"
+      node_soak_duration_in_minutes = 0  
+    }
   }
 
   identity {
@@ -210,16 +235,16 @@ resource "azurerm_kubernetes_cluster" "aks" {
 #   value     = "on"
 # }
 
-# 3. FIXES AZU-0024: Log engine database checkpoints
-resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
-  name      = "log_checkpoints"
-  server_id = azurerm_postgresql_flexible_server.postgres.id
-  value     = "on"
-}
+# # 3. FIXES AZU-0024: Log engine database checkpoints
+ resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
+   name      = "log_checkpoints"
+   server_id = azurerm_postgresql_flexible_server.postgres.id
+   value     = "on"
+ }
 
-# 4. FIXES AZU-0026: Require TLS 1.2 minimum protocol standard
-resource "azurerm_postgresql_flexible_server_configuration" "pg_ssl_min_version" {
-  name      = "ssl_min_protocol_version"
-  server_id = azurerm_postgresql_flexible_server.postgres.id
-  value     = "TLSv1.2"
-}
+# # 4. FIXES AZU-0026: Require TLS 1.2 minimum protocol standard
+ resource "azurerm_postgresql_flexible_server_configuration" "pg_ssl_min_version" {
+   name      = "ssl_min_protocol_version"
+   server_id = azurerm_postgresql_flexible_server.postgres.id
+   value     = "TLSv1.2"
+ }

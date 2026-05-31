@@ -25,3 +25,9 @@ variable "cluster_name" {
   type        = string
   description = "The target deployment name for the managed AKS cluster"
 }
+
+variable "vm_size" {
+  type        = string
+  description = "The size configuration profile for the AKS worker node VMs"
+  default     = "Standard_D2s_v3"
+}

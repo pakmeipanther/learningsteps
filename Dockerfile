@@ -27,10 +27,17 @@ COPY api/ ./api/
 # Step 8: Expose the network port your FastAPI application listens on
 EXPOSE 8000
 
-# Create a dedicated, non-root system group and user account
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+# ========================================================================
+# DEVSECOPS STANDARD: Establish a hardened non-root container profile
+# ========================================================================
+RUN groupadd -g 1000 appgroup && \
+    useradd -r -u 1000 -g appgroup -m -d /home/appuser -s /bin/bash appuser
 
-# Switch execution contexts away from root before launching processes
+# SUCCESS VALUE: Grants explicit folder permissions BEFORE dropping privileges
+RUN mkdir -p /home/appuser/.vscode-server/bin && \
+    chown -R appuser:appgroup /home/appuser
+
+# Drop system execution runtime authority to your verified unprivileged user
 USER appuser
 
 # Regularly poll the application entrypoint to ensure the server is alive
