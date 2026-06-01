@@ -39,6 +39,24 @@ spec:
             configMapKeyRef:
               name: learningsteps-config
               key: DB_USER
-        # Temporarily leaving the sensitive password here until we link Azure Key Vault next!
+        # SUCCESS VALUE: Injects the password dynamically from the CSI synchronized secret token
         - name: DB_PASSWORD
-          value: "YourSecurePassword"
+          valueFrom:
+            secretKeyRef:
+              name: learningsteps-app-secret
+              key: DB_PASSWORD
+              
+        # Secure volume mounting path for runtime file injection
+        volumeMounts:
+        - name: secrets-store-inline
+          mountPath: "/mnt/secrets-store"
+          readOnly: true
+
+      # Registers the Secrets Store CSI Driver volume tracking lifecycle
+      volumes:
+      - name: secrets-store-inline
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "learningsteps-kv-provider"
