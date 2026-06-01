@@ -12,17 +12,12 @@ spec:
     metadata:
       labels:
         app: learningsteps-app
-    spec:
-# ========================================================================
-# UPDATED CONFIGURATION: Injecting Application Runtime Environment Parameters
-# ========================================================================
-containers:
-- name: app-container
-  image: learningstepsreg01.azurecr.io/learningsteps-app:latest
-  ports:
-  - containerPort: 80
-        
-  # SUCCESS VALUE: Injects required parameters directly into Python runtime space
-  env:
-  - name: DATABASE_URL
-    value: "postgresql://postgresuser@learningsteps-db-server-hpkl4f:YourSecurePassword@learningsteps-db-server-hpkl4f.postgres.database.azure.com:5432/postgres"
+    spec: 
+      containers: 
+      - name: app-container
+        image: learningstepsreg01.azurecr.io/learningsteps-app:latest
+        ports:
+        - containerPort: 80
+        env: 
+        - name: DATABASE_URL
+          value: "postgresql://postgresuser@learningsteps-db-server-hpkl4f:YourSecurePassword@learningsteps-db-server-hpkl4f.postgres.database.azure.com:5432/postgres"
