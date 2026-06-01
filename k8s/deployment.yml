@@ -18,6 +18,27 @@ spec:
         image: learningstepsreg01.azurecr.io/learningsteps-app:latest
         ports:
         - containerPort: 80
-        env: 
-        - name: DATABASE_URL
-          value: "postgresql://postgresuser@learningsteps-db-server-hpkl4f:YourSecurePassword@learningsteps-db-server-hpkl4f.postgres.database.azure.com:5432/postgres"
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: learningsteps-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: learningsteps-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: learningsteps-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: learningsteps-config
+              key: DB_USER
+        # Temporarily leaving the sensitive password here until we link Azure Key Vault next!
+        - name: DB_PASSWORD
+          value: "YourSecurePassword"
