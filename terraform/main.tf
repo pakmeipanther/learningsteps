@@ -244,15 +244,27 @@ resource "azurerm_kubernetes_cluster" "aks" {
 # }
 
 # # 3. FIXES AZU-0024: Log engine database checkpoints
- resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
-   name      = "log_checkpoints"
-   server_id = azurerm_postgresql_flexible_server.postgres.id
-   value     = "on"
- }
+#  resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
+#    name      = "log_checkpoints"
+#    server_id = azurerm_postgresql_flexible_server.postgres.id
+#    value     = "on"
+#  }
 
 # # 4. FIXES AZU-0026: Require TLS 1.2 minimum protocol standard
- resource "azurerm_postgresql_flexible_server_configuration" "pg_ssl_min_version" {
-   name      = "ssl_min_protocol_version"
-   server_id = azurerm_postgresql_flexible_server.postgres.id
-   value     = "TLSv1.2"
- }
+#  resource "azurerm_postgresql_flexible_server_configuration" "pg_ssl_min_version" {
+#    name      = "ssl_min_protocol_version"
+#    server_id = azurerm_postgresql_flexible_server.postgres.id
+#    value     = "TLSv1.2"
+#  }
+
+# ========================================================================
+# SECURITY STANDARD: Explicit IAM Role Assignment for ACR Pod Pull Access
+# ========================================================================
+resource "azurerm_role_assignment" "aks_to_acr" {
+  # SUCCESS VALUE: Points explicitly to your verified, live cloud registry resource path
+  scope                = "/subscriptions/e6744405-892d-4ea5-987a-cfe11463a4dc/resourceGroups/LearningSteps-RG/providers/Microsoft.ContainerRegistry/registries/learningstepsreg01"
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+
+  depends_on = [azurerm_kubernetes_cluster.aks]
+}
