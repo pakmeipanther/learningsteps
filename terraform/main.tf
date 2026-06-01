@@ -183,6 +183,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   resource_group_name = data.azurerm_resource_group.rg.name
   dns_prefix          = "${var.project_name}-k8s"
 
+  # SUCCESS VALUE: Insert ONLY this block here to enable the addon natively
+  key_vault_secrets_provider {
+    secret_rotation_enabled = false
+  }
+
   # SUCCESS VALUE: Matches your existing cluster configuration to prevent API lockouts
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
