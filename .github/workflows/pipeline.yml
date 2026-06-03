@@ -195,6 +195,12 @@ jobs:
       # 🟢 FIX: Update the directory matching checks to look at your true folder path
       - name: Execute Rolling Deployment Update
         run: |
+          # FIX: Let the fresh GitHub runner wake up the database server first!
+          echo "Waking up empty database server from stopped state..."
+          az postgres flexible-server start \
+            --resource-group LearningSteps-RG \
+            --name learningsteps-db-server-76fgv4 || true
+          
           if [ -d "k8s-manifests" ]; then
             kubectl apply -f k8s-manifests/configmap.yml
             kubectl apply -f k8s-manifests/secretproviderclass.yml
