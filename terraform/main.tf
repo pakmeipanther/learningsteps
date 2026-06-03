@@ -28,6 +28,9 @@ resource "azurerm_subnet" "aks_subnet" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
+  # ADD THIS LINE to allow this subnet to talk to the Key Vault securely:
+  service_endpoints    = ["Microsoft.KeyVault"]
+
 }
 
 # 4. Provision a dedicated subnet for our Managed PostgreSQL engine
@@ -78,9 +81,11 @@ resource "azurerm_key_vault" "kv" {
     default_action = "Deny"
     # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
     ip_rules       = ["176.6.92.170"]
+    # ADD THIS LINE to authorize the AKS worker node network subnet:
+    virtual_network_subnet_ids = [azurerm_subnet.aks_subnet.id]
   }
 
-  # Grant your logged-in administrator account full management permissions
+  # Grant logged-in administrator account full management permissions
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
