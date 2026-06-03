@@ -202,6 +202,8 @@ jobs:
             kubectl apply -f k8s/configmap.yml
             kubectl apply -f k8s/secretproviderclass.yml
           fi
+          # ADD THIS LINE to automatically break any pod deadlocks before setting the new image:
+          kubectl rollout restart deployment/learningsteps-deployment || true
           
           kubectl set image deployment/learningsteps-deployment \
             app-container=${{ env.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
