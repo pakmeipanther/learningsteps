@@ -37,6 +37,9 @@ RUN groupadd -g 1000 appgroup && \
 RUN mkdir -p /home/appuser/.vscode-server/bin && \
     chown -R appuser:appgroup /home/appuser
 
+# ◄ ADD THIS CRUCIAL LINE right before changing the active USER:
+RUN chown -R appuser:appgroup /app
+
 # Drop system execution runtime authority to your verified unprivileged user
 USER appuser
 

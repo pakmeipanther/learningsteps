@@ -10,7 +10,15 @@ from repositories.interface_repository import DatabaseInterface
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Reconstructs connection coordinates dynamically from separate environment keys
+db_host = os.getenv("DB_HOST")
+db_user = os.getenv("DB_USER")
+db_pass = os.getenv("DB_PASSWORD")
+db_name = os.getenv("DB_NAME")
+db_port = os.getenv("DB_PORT", "5432")
+
+DATABASE_URL = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is missing")
 

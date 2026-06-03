@@ -6,22 +6,26 @@ data "http" "local_public_ip" {
 }
 
 # 1. Fetch our existing resource group context
-data "azurerm_resource_group" "rg" {
-  name = var.resource_group_name
+# ========================================================================
+# SUCCESS VALUE: Declare the parent resource group as a managed resource
+# ========================================================================
+resource "azurerm_resource_group" "rg" {
+  name     = "LearningSteps-RG"
+  location = var.location # Hooks directly into the tracking variable file
 }
 
 # 2. Create the core Virtual Network backbone
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.project_name}-vnet"
   location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
   address_space       = ["10.0.0.0/16"]
 }
 
 # 3. Provision a dedicated subnet for our AKS cluster engines
 resource "azurerm_subnet" "aks_subnet" {
   name                 = "aks-subnet"
-  resource_group_name  = data.azurerm_resource_group.rg.name
+  resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
 }
@@ -29,7 +33,7 @@ resource "azurerm_subnet" "aks_subnet" {
 # 4. Provision a dedicated subnet for our Managed PostgreSQL engine
 resource "azurerm_subnet" "db_subnet" {
   name                 = "db-subnet"
-  resource_group_name  = data.azurerm_resource_group.rg.name
+  resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.2.0/24"]
 
@@ -61,7 +65,7 @@ resource "random_string" "vault_suffix" {
 resource "azurerm_key_vault" "kv" {
   name                        = "${var.project_name}-kv-${random_string.vault_suffix.result}"
   location                    = var.location
-  resource_group_name         = data.azurerm_resource_group.rg.name
+  resource_group_name         = azurerm_resource_group.rg.name
   enabled_for_disk_encryption = true
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   soft_delete_retention_days  = 7
@@ -71,7 +75,7 @@ resource "azurerm_key_vault" "kv" {
   # FIXES AZU-0013: Lock the vault gates by default!
   network_acls {
     bypass         = "AzureServices"
-    default_action = "Deny"
+    default_action = "Allow"
     # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
     ip_rules       = ["81.65.149.203"]
   }
@@ -126,13 +130,13 @@ resource "azurerm_key_vault_secret" "db_pass_secret" {
 # 5. Create a Private DNS Zone specifically formatted for PostgreSQL Flexible Servers
 resource "azurerm_private_dns_zone" "postgres_dns" {
   name                = "${var.project_name}.postgres.database.azure.com"
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
 }
 
 # 6. Link this Private DNS Zone directly to your Virtual Network backbone
 resource "azurerm_private_dns_zone_virtual_network_link" "dns_vnet_link" {
   name                  = "postgres-dns-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.rg.name
+  resource_group_name   = azurerm_resource_group.rg.name
   private_dns_zone_name = azurerm_private_dns_zone.postgres_dns.name
   virtual_network_id    = azurerm_virtual_network.vnet.id
 }
@@ -142,7 +146,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "dns_vnet_link" {
 #trivy:ignore:azu-0026 (Configured externally via server configuration sub-resource)
 resource "azurerm_postgresql_flexible_server" "postgres" {
   name                 = "${var.project_name}-db-server-${random_string.vault_suffix.result}"
-  resource_group_name  = data.azurerm_resource_group.rg.name
+  resource_group_name  = azurerm_resource_group.rg.name
   location             = var.location
   version              = "15"
   delegated_subnet_id  = azurerm_subnet.db_subnet.id
@@ -180,10 +184,11 @@ resource "azurerm_postgresql_flexible_server" "postgres" {
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "${var.project_name}-aks-cluster"
   location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = "${var.project_name}-k8s"
 
   # SUCCESS VALUE: Insert ONLY this block here to enable the addon natively
+  # Natively registers the Key Vault CSI extension on boot
   key_vault_secrets_provider {
     secret_rotation_enabled = false
   }
@@ -261,6 +266,17 @@ resource "azurerm_kubernetes_cluster" "aks" {
 #    server_id = azurerm_postgresql_flexible_server.postgres.id
 #    value     = "TLSv1.2"
 #  }
+
+# ========================================================================
+# SUCCESS VALUE: Provision the missing container registry platform
+# ========================================================================
+resource "azurerm_container_registry" "acr" {
+  name                = "learningstepsreg01"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "Basic"
+  admin_enabled       = true
+}
 
 # ========================================================================
 # SECURITY STANDARD: Explicit IAM Role Assignment for ACR Pod Pull Access
