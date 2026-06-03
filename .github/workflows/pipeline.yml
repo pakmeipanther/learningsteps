@@ -208,7 +208,14 @@ jobs:
           kubectl set image deployment/learningsteps-deployment \
             app-container=${{ env.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
             
-          kubectl rollout status deployment/learningsteps-deployment --timeout=5m
+          # MODIFIED: If the rollout times out, dump the pod errors and application logs before exiting
+          if ! kubectl rollout status deployment/learningsteps-deployment --timeout=5m; then
+            echo "=== DETECTED ROLLOUT FAILURE: DUMPING CLUSTER DIAGNOSTICS ==="
+            kubectl get pods -o wide
+            kubectl describe pods
+            kubectl logs deployment/learningsteps-deployment --all-containers=true --tail=50
+            exit 1
+          fi
 
       # ========================================================================
       # POST-FLIGHT CLEANUP: Reset the firewall to a safe default state
