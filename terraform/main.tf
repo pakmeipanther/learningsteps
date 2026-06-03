@@ -77,7 +77,7 @@ resource "azurerm_key_vault" "kv" {
     bypass         = "AzureServices"
     default_action = "Deny"
     # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
-    ip_rules       = ["81.65.149.203"]
+    ip_rules       = ["176.6.92.170"]
   }
 
   # Grant your logged-in administrator account full management permissions
