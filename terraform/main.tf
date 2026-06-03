@@ -75,7 +75,7 @@ resource "azurerm_key_vault" "kv" {
   # FIXES AZU-0013: Lock the vault gates by default!
   network_acls {
     bypass         = "AzureServices"
-    default_action = "Allow"
+    default_action = "Deny"
     # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
     ip_rules       = ["81.65.149.203"]
   }
