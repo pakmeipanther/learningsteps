@@ -30,7 +30,6 @@ resource "azurerm_subnet" "aks_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
   # ADD THIS LINE to allow this subnet to talk to the Key Vault securely:
   service_endpoints    = ["Microsoft.KeyVault"]
-
 }
 
 # 4. Provision a dedicated subnet for our Managed PostgreSQL engine
@@ -79,8 +78,12 @@ resource "azurerm_key_vault" "kv" {
   network_acls {
     bypass         = "AzureServices"
     default_action = "Deny"
-    # SUCCESS VALUE: Grants explicit local access pass-through to my desk terminal machine
-    ip_rules       = ["176.6.92.170"]
+    # MODIFIED: Dynamically whitelists both your hardcoded and current session IP addresses
+    ip_rules       = [
+      "176.6.92.170",
+      "176.6.43.23",
+      chomp(data.http.local_public_ip.response_body)
+    ]
     # ADD THIS LINE to authorize the AKS worker node network subnet:
     virtual_network_subnet_ids = [azurerm_subnet.aks_subnet.id]
   }
@@ -117,7 +120,7 @@ resource "azurerm_key_vault_secret" "db_pass_secret" {
   # SUCCESS VALUE: Blocks secret injection until the 30-second network synchronization delay clears
   depends_on   = [time_sleep.wait_for_firewall_sync]
 
-  name         = "pg-admin-password"
+  name         = "db-password"
   value        = random_password.db_password.result
   key_vault_id = azurerm_key_vault.kv.id
 
@@ -125,8 +128,6 @@ resource "azurerm_key_vault_secret" "db_pass_secret" {
   content_type    = "text/plain"
   expiration_date = "2027-12-31T23:59:59Z"
 }
-
-
 
 # ==========================================
 # DATA LAYER: MANAGED POSTGRES FLEXIBLE SERVER
@@ -157,13 +158,11 @@ resource "azurerm_postgresql_flexible_server" "postgres" {
   delegated_subnet_id  = azurerm_subnet.db_subnet.id
   zone                 = "3"
   
-  
   # 7.1. CRITICAL: Make sure this line points to the new DNS zone ID!
   private_dns_zone_id    = azurerm_private_dns_zone.postgres_dns.id
   
   administrator_login    = "psqladmin"
   administrator_password = random_password.db_password.result
-  #zone                   = "1"
 
   storage_mb   = 32768
   sku_name     = "B_Standard_B1ms"
@@ -192,7 +191,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
   resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = "${var.project_name}-k8s"
 
-  # SUCCESS VALUE: Insert ONLY this block here to enable the addon natively
   # Natively registers the Key Vault CSI extension on boot
   key_vault_secrets_provider {
     secret_rotation_enabled = false
@@ -205,11 +203,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
   # FIXES AZU-0042: Enforce strict Role-Based Access Control
   role_based_access_control_enabled = true
 
-  # FIXES AZU-0041: Restrict API Server access. 
-  # Note: Set this to ["0.0.0.0/32"] to completely block external API traffic, 
-  # or include your specific public IP network range to connect directly from home!
-  # MODERN SYNTAX: Replaces the deprecated top-level variable array
-  # MODERN SYNTAX: Restricts management plane access strictly to your workspace desk
   # AUTOMATED SECURE PERIMETER: Dynamically whitelists your active Wi-Fi IP address
   api_server_access_profile {
     authorized_ip_ranges = [
@@ -222,7 +215,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     name           = "default"
     node_count     = 1
     os_disk_type   = "Managed"
-    vm_size      = var.vm_size
+    vm_size        = var.vm_size
     vnet_subnet_id = azurerm_subnet.aks_subnet.id
 
     # SUCCESS VALUE: Restricts the API from trying to lease temporary surge buffer VMs
@@ -250,31 +243,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
   depends_on = [azurerm_subnet.aks_subnet]
 }
 
-# =================================================================
-# DATABASE SECURITY HARDENING & AUDIT CONFIGURATIONS
-# =================================================================
-
-# 2. FIXES AZU-0021: Corrected parameter parameter name for connection throttling
-# resource "azurerm_postgresql_flexible_server_configuration" "pg_log_connection_throttling" {
-#   name      = "log_connection_throttling"
-#   server_id = azurerm_postgresql_flexible_server.postgres.id
-#   value     = "on"
-# }
-
-# # 3. FIXES AZU-0024: Log engine database checkpoints
-#  resource "azurerm_postgresql_flexible_server_configuration" "pg_log_checkpoints" {
-#    name      = "log_checkpoints"
-#    server_id = azurerm_postgresql_flexible_server.postgres.id
-#    value     = "on"
-#  }
-
-# # 4. FIXES AZU-0026: Require TLS 1.2 minimum protocol standard
-#  resource "azurerm_postgresql_flexible_server_configuration" "pg_ssl_min_version" {
-#    name      = "ssl_min_protocol_version"
-#    server_id = azurerm_postgresql_flexible_server.postgres.id
-#    value     = "TLSv1.2"
-#  }
-
 # ========================================================================
 # SUCCESS VALUE: Provision the missing container registry platform
 # ========================================================================
@@ -290,7 +258,6 @@ resource "azurerm_container_registry" "acr" {
 # SECURITY STANDARD: Explicit IAM Role Assignment for ACR Pod Pull Access
 # ========================================================================
 resource "azurerm_role_assignment" "aks_to_acr" {
-  # SUCCESS VALUE: Points explicitly to your verified, live cloud registry resource path
   scope                = "/subscriptions/e6744405-892d-4ea5-987a-cfe11463a4dc/resourceGroups/LearningSteps-RG/providers/Microsoft.ContainerRegistry/registries/learningstepsreg01"
   role_definition_name = "AcrPull"
   principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
@@ -298,39 +265,9 @@ resource "azurerm_role_assignment" "aks_to_acr" {
   depends_on = [azurerm_kubernetes_cluster.aks]
 }
 
-# 1. Establish a Private DNS Zone for Key Vault addresses
-resource "azurerm_private_dns_zone" "kv_dns" {
-  name                = "privatelink.vaultcore.azure.net"
-  resource_group_name = azurerm_resource_group.rg.name
-}
-
-# 2. Link the Private DNS Zone directly to the cluster's VNet
-resource "azurerm_private_dns_zone_virtual_network_link" "kv_dns_link" {
-  name                  = "kv-dns-vnet-link"
-  resource_group_name   = azurerm_resource_group.rg.name
-  private_dns_zone_name = azurerm_private_dns_zone.kv_dns.name
-  virtual_network_id    = azurerm_virtual_network.vnet.id
-}
-
-# 3. Create a Private Endpoint for the Key Vault inside the AKS Subnet
-resource "azurerm_private_endpoint" "kv_private_endpoint" {
-  name                = "learningsteps-kv-pe"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.aks_subnet.id
-
-  private_service_connection {
-    name                           = "kv-privatelink-connection"
-    private_connection_resource_id = azurerm_key_vault.kv.id
-    subresource_names              = ["vault"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "kv-dns-zone-group"
-    private_dns_zone_ids = [azurerm_private_dns_zone.kv_dns.id]
-  }
-}
+# ========================================================================
+# AZURE KEY VAULT PRIVATE ENDPOINT AND INTERNAL PRIVATE DNS INFRASTRUCTURE
+# ========================================================================
 
 # 1. Establish a Private DNS Zone explicitly for Azure Key Vault domain namespaces
 resource "azurerm_private_dns_zone" "kv_dns" {
