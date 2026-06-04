@@ -195,35 +195,22 @@ jobs:
       # 🟢 FIX: Update the directory matching checks to look at your true folder path
       - name: Execute Rolling Deployment Update
         run: |
-          # FIX: Let the fresh GitHub runner wake up the database server first!
-          echo "Waking up empty database server from stopped state..."
-          az postgres flexible-server start \
-            --resource-group LearningSteps-RG \
-            --name learningsteps-db-server-76fgv4 || true
+          # 🟢 FORCE APPLY: Explicitly path into your true workspace directory
+          kubectl apply -f k8s/configmap.yml
+          kubectl apply -f k8s/secretproviderclass.yml
           
-          if [ -d "k8s-manifests" ]; then
-            kubectl apply -f k8s-manifests/configmap.yml
-            kubectl apply -f k8s-manifests/secretproviderclass.yml
-          elif [ -d "k8s" ]; then
-            kubectl apply -f k8s/configmap.yml
-            kubectl apply -f k8s/secretproviderclass.yml
-          fi
-          # ADD THIS LINE to automatically break any pod deadlocks before setting the new image:
+          # Force a clean rollout restart to ensure the storage mounts cycle freshly
           kubectl rollout restart deployment/learningsteps-deployment || true
-          
+
           kubectl set image deployment/learningsteps-deployment \
             app-container=${{ env.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
             
-          # MODIFIED: If the rollout times out, dump the pod errors and application logs before exiting
           if ! kubectl rollout status deployment/learningsteps-deployment --timeout=5m; then
             echo "=== DETECTED ROLLOUT FAILURE: DUMPING CLUSTER DIAGNOSTICS ==="
             kubectl get pods -o wide
             echo "--- Cluster Security & Mount Events ---"
             kubectl get events -n default --sort-by='.metadata.creationTimestamp' | tail -n 30
             kubectl describe pods
-            
-            # 🟢 FIX: Add "|| true" to ensure this line won't crash the pipeline script prematurely
-            kubectl logs deployment/learningsteps-deployment --all-containers=true --tail=50 || true
             exit 1
           fi
 
