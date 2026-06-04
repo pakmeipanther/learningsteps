@@ -212,7 +212,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
   # MODERN SYNTAX: Restricts management plane access strictly to your workspace desk
   # AUTOMATED SECURE PERIMETER: Dynamically whitelists your active Wi-Fi IP address
   api_server_access_profile {
-    authorized_ip_ranges = ["${chomp(data.http.local_public_ip.response_body)}/32"]
+    authorized_ip_ranges = [
+      "176.6.92.170/32",
+      "${chomp(data.http.local_public_ip.response_body)}/32"
+    ]
   }
 
   default_node_pool {
@@ -293,4 +296,38 @@ resource "azurerm_role_assignment" "aks_to_acr" {
   principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 
   depends_on = [azurerm_kubernetes_cluster.aks]
+}
+
+# 1. Establish a Private DNS Zone for Key Vault addresses
+resource "azurerm_private_dns_zone" "kv_dns" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+# 2. Link the Private DNS Zone directly to the cluster's VNet
+resource "azurerm_private_dns_zone_virtual_network_link" "kv_dns_link" {
+  name                  = "kv-dns-vnet-link"
+  resource_group_name   = azurerm_resource_group.rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.kv_dns.name
+  virtual_network_id    = azurerm_virtual_network.vnet.id
+}
+
+# 3. Create a Private Endpoint for the Key Vault inside the AKS Subnet
+resource "azurerm_private_endpoint" "kv_private_endpoint" {
+  name                = "learningsteps-kv-pe"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.aks_subnet.id
+
+  private_service_connection {
+    name                           = "kv-privatelink-connection"
+    private_connection_resource_id = azurerm_key_vault.kv.id
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "kv-dns-zone-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.kv_dns.id]
+  }
 }
