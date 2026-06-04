@@ -205,8 +205,9 @@ jobs:
           
           kubectl rollout restart deployment/learningsteps-deployment || true
 
+          # 🟢 MODIFIED: Hardcode the explicit registry name to clear the variable crash
           kubectl set image deployment/learningsteps-deployment \
-            app-container=${{ env.AZURE_ACR_NAME }}.azurecr.io/learningsteps-app:${{ github.sha }}
+            app-container=learningstepsreg01.azurecr.io/learningsteps-app:${{ github.sha }}
             
           if ! kubectl rollout status deployment/learningsteps-deployment --timeout=5m; then
             echo "=== DETECTED ROLLOUT FAILURE: DUMPING CLUSTER DIAGNOSTICS ==="
