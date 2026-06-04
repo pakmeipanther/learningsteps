@@ -195,11 +195,14 @@ jobs:
       # 🟢 FIX: Update the directory matching checks to look at your true folder path
       - name: Execute Rolling Deployment Update
         run: |
-          # 🟢 FORCE APPLY: Explicitly path into your true workspace directory
+          # 🟢 FIX: Restart cluster CoreDNS to clear out the stale DNS lookup caches
+          echo "Flushing cluster CoreDNS cache..."
+          kubectl rollout restart deployment/coredns -n kube-system || true
+          
+          # Force apply files directly from the true directory workspace context
           kubectl apply -f k8s/configmap.yml
           kubectl apply -f k8s/secretproviderclass.yml
           
-          # Force a clean rollout restart to ensure the storage mounts cycle freshly
           kubectl rollout restart deployment/learningsteps-deployment || true
 
           kubectl set image deployment/learningsteps-deployment \
